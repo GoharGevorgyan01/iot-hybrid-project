@@ -31,3 +31,9 @@ crash.log
 .vscode/
 .DS_Store
 Thumbs.db
+
+# YOLO
+model/runs/
+model/weight/*.pt
+*.pt
+*.onnx
