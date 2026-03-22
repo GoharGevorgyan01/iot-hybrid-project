@@ -1,5 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+.env.*
+
+# Databases
+*.db
+*.sqlite
+
+# Results / logs
+results/
+logs/
+
 # Terraform
 **/.terraform/*
 *.tfstate
 *.tfstate.*
 crash.log
+
+# AWS keys / certificates
+*.pem
+*.key
+*.crt
+
+# IDE / OS
+.vscode/
+.DS_Store
+Thumbs.db
