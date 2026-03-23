@@ -1,3 +1,4 @@
+DROP DATABASE IF EXISTS fire_smoke_db;
 -- ============================================
 -- Database for IoT Fire/Smoke Detection System
 -- Thesis Project
@@ -116,3 +117,91 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (frame_id) REFERENCES frames(frame_id)
 );
+
+USE fire_smoke_db;
+SHOW TABLES;
+
+ALTER TABLE frames
+ADD COLUMN dataset_split VARCHAR(20) AFTER camera_id;
+USE fire_smoke_db;
+
+INSERT IGNORE INTO cameras (camera_id, location, fps, status)
+VALUES
+('camera_1', 'AoF_Source', 30, 'active'),
+('camera_2', 'PublicDataset_Source', 25, 'active'),
+('camera_3', 'WEB_Source', 20, 'active'),
+('camera_unknown', 'Unknown_Source', 15, 'inactive');
+-- ==========================================================
+-- YOLO Experiment Tracking Schema Update
+--
+-- This ALTER TABLE extends the model_performance table to store
+-- experiment configuration parameters and evaluation metrics
+-- for YOLO object detection models.
+ALTER TABLE model_performance
+ADD COLUMN run_name VARCHAR(100) AFTER model_version,
+ADD COLUMN epochs INT AFTER run_name,
+ADD COLUMN image_size INT AFTER epochs,
+ADD COLUMN batch_size INT AFTER image_size,
+ADD COLUMN map50 FLOAT AFTER recall_score,
+ADD COLUMN map50_95 FLOAT AFTER map50,
+ADD COLUMN dataset_split VARCHAR(20) AFTER inference_time_ms,
+ADD COLUMN notes TEXT AFTER dataset_split;
+-------------------------------------------
+select * 
+from cameras;
+
+describe frames;
+----------------------------------------
+USE fire_smoke_db;
+
+SELECT * FROM cameras;
+
+SELECT COUNT(*) FROM frames;
+
+SELECT dataset_split, COUNT(*) AS total_frames
+FROM frames
+GROUP BY dataset_split;
+
+SELECT frame_id, file_name, camera_id, dataset_split
+FROM frames
+LIMIT 20;
+
+SELECT *
+FROM frames
+LIMIT 5;
+
+SELECT COUNT(*) FROM frames;
+SELECT dataset_split, COUNT(*) FROM frames GROUP BY dataset_split;
+
+USE fire_smoke_db;
+
+SELECT COUNT(*) FROM network_metrics;
+
+SELECT qos_level, COUNT(*) AS total_rows
+FROM network_metrics
+GROUP BY qos_level;
+
+SELECT * FROM network_metrics
+LIMIT 10;
+
+select *
+from alerts
+limit 10;
+select *
+from cameras
+limit 10;
+select *
+from detections
+limit 10;
+select *
+from frames
+limit 10;
+select *
+from model_performance
+limit 10;
+select *
+from network_metrics
+limit 10;
+select *
+from transmission_decisions
+limit 10;
