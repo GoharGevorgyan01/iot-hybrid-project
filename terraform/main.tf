@@ -106,3 +106,63 @@ resource "aws_iot_policy_attachment" "attach_policy_to_cert" {
   policy = aws_iot_policy.fire_detector_policy.name
   target = aws_iot_certificate.fire_detector_cert.arn
 }
+# =========================================
+# IAM Role for AWS IoT Topic Rule
+# This role allows AWS IoT to write messages to S3
+# =========================================
+resource "aws_iam_role" "iot_rule_s3_role" {
+  name = "iot-rule-s3-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "iot.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# =========================================
+# IAM Policy for writing to S3
+# =========================================
+resource "aws_iam_role_policy" "iot_rule_s3_policy" {
+  name = "iot-rule-s3-policy"
+  role = aws_iam_role.iot_rule_s3_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.iot_raw_events.arn}/*"
+      }
+    ]
+  })
+}
+
+# =========================================
+# AWS IoT Topic Rule
+# Reads messages from fire_smoke/predictions
+# and stores them in S3
+# =========================================
+resource "aws_iot_topic_rule" "predictions_to_s3" {
+  name        = "predictions_to_s3"
+  description = "Store fire_smoke prediction messages in S3"
+  enabled     = true
+  sql         = "SELECT * FROM 'fire_smoke/predictions'"
+  sql_version = "2016-03-23"
+
+  s3 {
+    bucket_name = aws_s3_bucket.iot_raw_events.bucket
+    key         = "predictions/${timestamp()}.json"
+    role_arn    = aws_iam_role.iot_rule_s3_role.arn
+  }
+}

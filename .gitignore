@@ -41,3 +41,5 @@ model/weight/*.pt
 # Virtual environment
 .venv/
 venv/
+
+edge/publisher/certs/
