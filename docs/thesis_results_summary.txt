@@ -122,3 +122,36 @@ Sample decision reasons:
 - smoke detected
 - no detection and bad network
 - no critical event
+----------------------------------------------
+ML Dataset Export:
+- Total rows: 21527
+- Train rows: 14122
+- Validation rows: 3099
+- Test rows: 4306
+
+Priority Level Distribution:
+- low: 13764
+- medium: 5664
+- high: 2099
+
+ML Model:
+- Model type: Random Forest Classifier
+- Target: priority_level
+
+Validation Results:
+- Accuracy: 0.9952
+
+Test Results:
+- Accuracy: 0.9951
+
+Top Important Features:
+1. total_detected_objects
+2. max_confidence
+3. fire_count
+4. smoke_count
+
+Interpretation:
+The ML model learned to predict the rule-based priority labels with very high accuracy.
+This shows that the decision logic can be approximated by a supervised learning model using detection, frame, and network-related features.
+ML մոդելը շատ բարձր ճշտությամբ սովորել է rule-based decision engine-ի կողմից ստեղծված priority_level label-ները։
+Սա ցույց է տալիս, որ փոխանցման առաջնահերթության որոշման rule-based logic-ը հնարավոր է մոտավորել supervised learning model-ով՝ օգտագործելով detection, frame և network feature-ներ։
