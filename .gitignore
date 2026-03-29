@@ -37,3 +37,7 @@ model/runs/
 model/weight/*.pt
 *.pt
 *.onnx
+
+# Virtual environment
+.venv/
+venv/

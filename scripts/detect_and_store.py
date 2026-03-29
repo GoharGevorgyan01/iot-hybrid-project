@@ -6,7 +6,11 @@ import mysql.connector
 # SETTINGS
 # -----------------------------
 MODEL_PATH = r"C:\Users\User\Desktop\project\model\weights\yolov8s_best.pt"
-IMAGE_DIR = r"C:\Users\User\Documents\hmo\tez\smoke-fire-dataset\data\test\images"
+IMAGE_DIRS = [
+    r"C:\Users\User\Documents\hmo\tez\smoke-fire-dataset\data\train\images",
+    r"C:\Users\User\Documents\hmo\tez\smoke-fire-dataset\data\val\images",
+    r"C:\Users\User\Documents\hmo\tez\smoke-fire-dataset\data\test\images"
+]
 MIN_CONFIDENCE = 0.40
 
 DB_CONFIG = {
@@ -37,65 +41,67 @@ cursor = conn.cursor()
 # -----------------------------
 # PROCESS IMAGES
 # -----------------------------
-image_files = [f for f in os.listdir(IMAGE_DIR) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
-
-print(f"Found {len(image_files)} images.")
-
 inserted_count = 0
 
-for file_name in image_files:
-    image_path = os.path.join(IMAGE_DIR, file_name)
-    print(f"Processing: {file_name}")
+for image_dir in IMAGE_DIRS:
+    image_files = [f for f in os.listdir(image_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
 
-    # find matching frame_id in frames table
-    cursor.execute("SELECT frame_id FROM frames WHERE file_name = %s", (file_name,))
-    row = cursor.fetchone()
+    print(f"Processing folder: {image_dir}")
+    print(f"Found {len(image_files)} images.")
 
-    if not row:
-        print(f"Skipping {file_name} - frame_id not found in database")
-        continue
+    for file_name in image_files:
+        image_path = os.path.join(image_dir, file_name)
+        print(f"Processing: {file_name}")
 
-    frame_id = row[0]
+        # find matching frame_id in frames table
+        cursor.execute("SELECT frame_id FROM frames WHERE file_name = %s", (file_name,))
+        row = cursor.fetchone()
 
-    # optional: old detections for same frame can be removed
-    cursor.execute("DELETE FROM detections WHERE frame_id = %s", (frame_id,))
-
-    # run inference
-    results = model(image_path, verbose=False)
-
-    for result in results:
-        if result.boxes is None:
+        if not row:
+            print(f"Skipping {file_name} - frame_id not found in database")
             continue
 
-        for box in result.boxes:
-            class_id = int(box.cls[0].item())
-            confidence = float(box.conf[0].item())
-            if confidence < MIN_CONFIDENCE:
+        frame_id = row[0]
+
+        # optional: old detections for same frame can be removed
+        cursor.execute("DELETE FROM detections WHERE frame_id = %s", (frame_id,))
+
+        # run inference
+        results = model(image_path, verbose=False)
+
+        for result in results:
+            if result.boxes is None:
                 continue
-            xywh = box.xywh[0].tolist()
 
-            object_type = CLASS_MAP.get(class_id, "unknown")
+            for box in result.boxes:
+                class_id = int(box.cls[0].item())
+                confidence = float(box.conf[0].item())
+                if confidence < MIN_CONFIDENCE:
+                    continue
+                xywh = box.xywh[0].tolist()
 
-            bbox_x = float(xywh[0])
-            bbox_y = float(xywh[1])
-            bbox_width = float(xywh[2])
-            bbox_height = float(xywh[3])
+                object_type = CLASS_MAP.get(class_id, "unknown")
 
-            cursor.execute("""
-                INSERT INTO detections
-                (frame_id, object_type, confidence, bbox_x, bbox_y, bbox_width, bbox_height)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                frame_id,
-                object_type,
-                confidence,
-                bbox_x,
-                bbox_y,
-                bbox_width,
-                bbox_height
-            ))
+                bbox_x = float(xywh[0])
+                bbox_y = float(xywh[1])
+                bbox_width = float(xywh[2])
+                bbox_height = float(xywh[3])
 
-            inserted_count += 1
+                cursor.execute("""
+                    INSERT INTO detections
+                    (frame_id, object_type, confidence, bbox_x, bbox_y, bbox_width, bbox_height)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    frame_id,
+                    object_type,
+                    confidence,
+                    bbox_x,
+                    bbox_y,
+                    bbox_width,
+                    bbox_height
+                ))
+
+                inserted_count += 1
 
 conn.commit()
 cursor.close()
