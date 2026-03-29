@@ -155,3 +155,69 @@ The ML model learned to predict the rule-based priority labels with very high ac
 This shows that the decision logic can be approximated by a supervised learning model using detection, frame, and network-related features.
 ML մոդելը շատ բարձր ճշտությամբ սովորել է rule-based decision engine-ի կողմից ստեղծված priority_level label-ները։
 Սա ցույց է տալիս, որ փոխանցման առաջնահերթության որոշման rule-based logic-ը հնարավոր է մոտավորել supervised learning model-ով՝ օգտագործելով detection, frame և network feature-ներ։
+
+Transmission Action ML Results:
+- Model type: Random Forest Classifier
+- Target: transmission_action
+
+Validation Results:
+- Accuracy: 0.9977
+
+Test Results:
+- Accuracy: 0.9426
+
+Main Classes:
+- drop
+- local_store
+- compress
+- send
+
+Top Important Features:
+1. max_confidence
+2. total_detected_objects
+3. packet_loss
+4. fire_count
+5. qos_level
+
+Interpretation:
+The ML model learned to predict the rule-based transmission_action labels with high accuracy.
+Compared to priority_level prediction, this task is more complex, because some low-priority actions such as drop and local_store are closer to each other.
+Network-related features, especially packet_loss and qos_level, became more important for this target.
+ML մոդելը բարձր ճշտությամբ սովորել է rule-based transmission_action label-ները։
+Priority_level target-ի համեմատ այս խնդիրը ավելի բարդ է, քանի որ որոշ low-priority action-ներ, օրինակ drop և local_store, իրար ավելի մոտ են։
+Այս target-ի դեպքում network-related feature-ները, հատկապես packet_loss և qos_level, ավելի կարևոր դեր են ունեցել։
+
+
+Selected_qos ML արդյունքներ:
+- Մոդելի տեսակը: Random Forest Classifier
+- Target: selected_qos
+
+Validation արդյունք:
+- Accuracy: 0.9981
+
+Test արդյունք:
+- Accuracy: 0.9979
+
+QoS class-երը:
+- 0
+- 1
+- 2
+
+Ամենակարևոր feature-ները:
+1. max_confidence
+2. total_detected_objects
+3. fire_count
+4. smoke_count
+
+Մեկնաբանություն:
+ML մոդելը շատ բարձր ճշտությամբ սովորել է rule-based selected_qos label-ները։
+Այս target-ի դեպքում ամենակարևոր feature-ները հիմնականում կապված են եղել detection ուժգնության և հայտնաբերված օբյեկտների քանակի հետ։
+
+-------------------------------------------------------------------------------------------
+ML models summary:
+- priority_level test accuracy: 0.9951
+- transmission_action test accuracy: 0.9426
+- selected_qos test accuracy: 0.9979
+
+Conclusion:
+Among the three ML tasks, transmission_action prediction was the most difficult, while priority_level and selected_qos prediction achieved near-perfect accuracy.
