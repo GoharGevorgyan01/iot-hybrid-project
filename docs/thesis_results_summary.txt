@@ -99,3 +99,26 @@ YOLOv8s
 
 Reason:
 Best overall accuracy in controlled comparison.
+
+-----------------------------------------------------------------------------
+Decision Engine v2 Results:
+- low: 20023
+- medium: 1114
+- high: 390
+
+Alert severity distribution (v2):
+- medium: 1114
+- high: 390
+
+Decision Engine v2:Decision engine-ի նոր տարբերակում հաշվի են առնվել ոչ միայն 
+fire/smoke detections-ը, այլ նաև total_detected_objects, motion_level, 
+frame_size_kb, bandwidth_usage_kb, latency_ms և packet_loss ցուցանիշները։
+Արդյունքում medium և high priority որոշումների քանակը աճել է նախորդ 
+տարբերակի համեմատ։
+
+Sample decision reasons:
+- fire detected with high confidence
+- multiple detections in frame
+- smoke detected
+- no detection and bad network
+- no critical event
