@@ -122,6 +122,7 @@ def fetch_latest_frame_features():
         f.frame_id,
         f.file_name,
         f.camera_id,
+        c.location,
         f.frame_size_kb,
         f.brightness,
         f.blur_score,
@@ -140,18 +141,19 @@ def fetch_latest_frame_features():
     FROM frames f
     LEFT JOIN detections d ON f.frame_id = d.frame_id
     LEFT JOIN network_metrics nm ON f.frame_id = nm.frame_id
+    LEFT JOIN cameras c ON f.camera_id = c.camera_id
 
     GROUP BY
-        f.frame_id, f.file_name, f.camera_id,
+        f.frame_id, f.file_name, f.camera_id, c.location,
         f.frame_size_kb, f.brightness, f.blur_score, f.motion_level,
         nm.latency_ms, nm.packet_loss, nm.bandwidth_usage_kb, nm.qos_level
 
     ORDER BY f.frame_id DESC
-    LIMIT 1
+    LIMIT 10
     """
 
     cursor.execute(query)
-    row = cursor.fetchone()
+    row = cursor.fetchall()
 
     cursor.close()
     conn.close()
@@ -174,7 +176,19 @@ def prepare_model_input(row, feature_columns):
 
     return pd.DataFrame([data])
 
+def determine_payload_type(action_pred):
+    action = str(action_pred).lower()
 
+    if action == "send_full_frame":
+        return "full_event"
+    elif action == "compress":
+        return "compact_event"
+    else:
+        return "minimal_event"
+
+
+def determine_alert_flag(priority_pred):
+    return str(priority_pred).lower() == "high"
 # =========================================
 # Function: build final JSON payload
 # Նպատակ՝ prediction-ներն ու input feature-երը դնել մեկ միասնական JSON structure-ի մեջ
@@ -182,12 +196,17 @@ def prepare_model_input(row, feature_columns):
 # Սա հետո կարող ենք ուղարկել MQTT/AWS IoT-ին
 # =========================================
 def build_payload(row, priority_pred, action_pred, qos_pred):
+    payload_type = determine_payload_type(action_pred)
+    alert_flag = determine_alert_flag(priority_pred)
     payload = {
         "frame_id": int(row["frame_id"]),
         "file_name": row["file_name"],
         "camera_id": row["camera_id"],
+        "location": row["location"],
         "timestamp": datetime.now().isoformat(),
-
+        "payload_type": payload_type,
+        "alert_flag": alert_flag,
+        
         "features": {
             "fire_count": int(convert_decimal(row["fire_count"])),
             "smoke_count": int(convert_decimal(row["smoke_count"])),
@@ -251,46 +270,54 @@ def main():
 
     # 2) Fetch latest frame data from DB
     print("Fetching latest frame data from MySQL...")
-    row = fetch_latest_frame_features()
+    rows = fetch_latest_frame_features()
 
     # Եթե տվյալ չկա՝ կանգնում ենք
-    if not row:
+    if not rows:
         print("No data found in database.")
         return
 
     # 3) Prepare separate inputs for each model
     print("Preparing model inputs...")
-    X_priority = prepare_model_input(row, PRIORITY_FEATURES)
-    X_action = prepare_model_input(row, ACTION_FEATURES)
-    X_qos = prepare_model_input(row, QOS_FEATURES)
+    for row in rows:
+        print(f"\nProcessing frame_id={row['frame_id']} ...")
+        X_priority = prepare_model_input(row, PRIORITY_FEATURES)
+        X_action = prepare_model_input(row, ACTION_FEATURES)
+        X_qos = prepare_model_input(row, QOS_FEATURES)
 
-    # 4) Run predictions
-    print("Running ML inference...")
-    priority_pred = priority_model.predict(X_priority)[0]
-    action_pred = action_model.predict(X_action)[0]
-    qos_pred = qos_model.predict(X_qos)[0]
+        # 4) Run predictions
+        print("Running ML inference...")
+        priority_pred = priority_model.predict(X_priority)[0]
+        action_pred = action_model.predict(X_action)[0]
+        qos_pred = qos_model.predict(X_qos)[0]
 
-    # 5) Build final payload
-    payload = build_payload(row, priority_pred, action_pred, qos_pred)
-    save_prediction_to_db(row, priority_pred, action_pred, qos_pred, payload)
-    publish_payload(payload)
-    print("Payload published to AWS IoT Core.")
-    print("Prediction saved to ml_predictions table.")
+        # 5) Build final payload
+        payload = build_payload(row, priority_pred, action_pred, qos_pred)
+        save_prediction_to_db(row, priority_pred, action_pred, qos_pred, payload)
+        publish_payload(payload, qos_level=int(qos_pred))
+        print("Payload published to AWS IoT Core.")
+        print("Prediction saved to ml_predictions table.")
 
-    # 6) Print JSON payload
-    print("\nJSON Payload:")
-    print(json.dumps(payload, indent=4))
+        # 6) Print JSON payload
+        print("\nJSON Payload:")
+        print(json.dumps(payload, indent=4))
+        # 7) Print simple log line
+        print("\nLog:")
+        payload_type = determine_payload_type(action_pred)
+        alert_flag = determine_alert_flag(priority_pred)
 
-    # 7) Print simple log line
-    print("\nLog:")
-    print(
-        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-        f"frame_id={row['frame_id']} | "
-        f"priority={priority_pred} | "
-        f"action={action_pred} | "
-        f"qos={qos_pred}"
-    )
-
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+            f"frame_id={row['frame_id']} | "
+            f"camera={row['camera_id']} | "
+            f"location={row['location']} | "
+            f"priority={priority_pred} | "
+            f"action={action_pred} | "
+            f"qos={qos_pred} | "
+            f"payload_type={payload_type} | "
+            f"alert={alert_flag}"
+        )
+    print(f"\nProcessed {len(rows)} frames successfully.")
 
 # =========================================
 # Script entry point

@@ -162,7 +162,7 @@ resource "aws_iot_topic_rule" "predictions_to_s3" {
 
   s3 {
     bucket_name = aws_s3_bucket.iot_raw_events.bucket
-    key         = "predictions/${timestamp()}.json"
+    key = "predictions/$${frame_id}-$${timestamp()}.json"
     role_arn    = aws_iam_role.iot_rule_s3_role.arn
   }
 }

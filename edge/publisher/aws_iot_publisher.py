@@ -19,7 +19,7 @@ KEY_PATH = os.path.join(BASE_DIR, "edge", "publisher", "certs", "private.pem.key
 ROOT_CA_PATH = os.path.join(BASE_DIR, "edge", "publisher", "certs", "AmazonRootCA1.pem")
 
 
-def publish_payload(payload):
+def publish_payload(payload, qos_level=1):
     print("Connecting to AWS IoT Core...")
 
     mqtt_connection = mqtt_connection_builder.mtls_from_path(
@@ -37,10 +37,16 @@ def publish_payload(payload):
     print("Connected.")
 
     print(f"Publishing to topic: {TOPIC}")
+    if qos_level == 0:
+        mqtt_qos = mqtt.QoS.AT_MOST_ONCE
+    elif qos_level == 2:
+        mqtt_qos = mqtt.QoS.EXACTLY_ONCE
+    else:
+        mqtt_qos = mqtt.QoS.AT_LEAST_ONCE
     mqtt_connection.publish(
         topic=TOPIC,
         payload=json.dumps(payload),
-        qos=mqtt.QoS.AT_LEAST_ONCE
+        qos=mqtt_qos
     )
     print("Message published successfully.")
 
