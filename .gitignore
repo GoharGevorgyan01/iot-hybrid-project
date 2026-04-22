@@ -43,3 +43,37 @@ model/weight/*.pt
 venv/
 
 edge/publisher/certs/
+
+
+# =========================
+# Large data files (DO NOT COMMIT)
+# =========================
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+=========================
+# Input videos (ignore all)
+# =========================
+video_pipeline/input/
+# =========================
+# Generated outputs (ignore all by default)
+# =========================
+video_pipeline/output/
+video_pipeline/db/outputs/
+
+# =========================
+# BUT keep best analysis figures
+# =========================
+!video_pipeline/db/outputs/
+!video_pipeline/db/outputs/best/
+!video_pipeline/db/outputs/best/*
+
+# =========================
+# OS / editor junk
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.ipynb_checkpoints/

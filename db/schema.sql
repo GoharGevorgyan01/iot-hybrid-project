@@ -147,17 +147,190 @@ ADD COLUMN map50_95 FLOAT AFTER map50,
 ADD COLUMN dataset_split VARCHAR(20) AFTER inference_time_ms,
 ADD COLUMN notes TEXT AFTER dataset_split;
 -------------------------------------------
-select * 
-from cameras;
+USE fire_smoke_db;
+ALTER TABLE model_performance
+ADD COLUMN model_name VARCHAR(50) NULL COMMENT 'model name',
+ADD COLUMN precision_score FLOAT NULL COMMENT 'precision',
+ADD COLUMN recall_score FLOAT NULL COMMENT 'recall',
+ADD COLUMN inference_ms FLOAT NULL COMMENT 'inference time ms',
+ADD COLUMN preprocess_ms FLOAT NULL COMMENT 'preprocess time ms',
+ADD COLUMN postprocess_ms FLOAT NULL COMMENT 'postprocess time ms',
+ADD COLUMN training_time_sec FLOAT NULL COMMENT 'total training time sec',
+ADD COLUMN weights_path VARCHAR(255) NULL COMMENT 'best.pt path',
+ADD COLUMN comparison_group VARCHAR(50) NULL COMMENT 'comparison group',
+ADD COLUMN is_final_test BOOLEAN DEFAULT FALSE COMMENT 'final test result flag';
+---------------------------------------
+USE fire_smoke_db;
+ALTER TABLE model_performance
+ADD COLUMN preprocess_ms FLOAT NULL COMMENT 'preprocess time ms',
+ADD COLUMN postprocess_ms FLOAT NULL COMMENT 'postprocess time ms',
+ADD COLUMN training_time_sec FLOAT NULL COMMENT 'total training time sec',
+ADD COLUMN weights_path VARCHAR(255) NULL COMMENT 'best.pt path',
+ADD COLUMN comparison_group VARCHAR(50) NULL COMMENT 'comparison group',
+ADD COLUMN is_final_test BOOLEAN DEFAULT FALSE COMMENT 'final test flag';
+---------------
+USE fire_smoke_db;
+INSERT INTO model_performance
+(model_version, run_name, epochs, image_size, batch_size,
+ precision_score, recall_score, map50, map50_95,
+ inference_time_ms, preprocess_ms, postprocess_ms, training_time_sec,
+ dataset_split, weights_path, comparison_group, is_final_test, notes, evaluation_date)
+VALUES
+('yolov8n', 'yolov8n_5e_416', 5, 416, 16,
+ 0.621, 0.564, 0.604, 0.326,
+ 1.9, 0.4, 1.9, 11581.6,
+ 'test', '/content/drive/MyDrive/thesis_yolo/runs/yolov8n_5e_416/weights/best.pt',
+ 'controlled_5e_416', TRUE,
+ 'lightweight baseline, fastest inference in controlled comparison',
+ CURDATE()),
+
+('yolov8s', 'yolov8s_5e_416', 5, 416, 16,
+ 0.658, 0.569, 0.626, 0.334,
+ 2.8, 0.4, 1.6, 7763.35,
+ 'test', '/content/drive/MyDrive/thesis_yolo/runs/yolov8s_5e_416/weights/best.pt',
+ 'controlled_5e_416', TRUE,
+ 'best overall accuracy in controlled comparison; selected model',
+ CURDATE()),
+
+('yolo11n', 'yolo11n_5e_416', 5, 416, 16,
+ 0.617, 0.553, 0.591, 0.315,
+ 2.1, 0.4, 1.5, 1332.32,
+ 'test', '/content/drive/MyDrive/thesis_yolo/runs/yolo11n_5e_416/weights/best.pt',
+ 'controlled_5e_416', TRUE,
+ 'fastest training among controlled runs',
+ CURDATE());
+ 
+ CREATE TABLE ml_predictions (
+    prediction_id INT AUTO_INCREMENT PRIMARY KEY,
+    frame_id INT NOT NULL,
+    predicted_priority VARCHAR(50),
+    predicted_action VARCHAR(50),
+    predicted_qos INT,
+    payload_json JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (frame_id) REFERENCES frames(frame_id)
+);
+SELECT * FROM ml_predictions ORDER BY prediction_id DESC;
+----------------------------------------------------------------
+ SELECT model_version, run_name, precision_score, recall_score, map50, map50_95, inference_time_ms, training_time_sec
+FROM model_performance
+WHERE comparison_group = 'controlled_5e_416';
+-----------------------------------
+DESCRIBE model_performance;
+DESCRIBE transmission_decisions;
+DESCRIBE alerts;
+DESCRIBE cameras;
+DESCRIBE detections;
+DESCRIBE frames;
+DESCRIBE network_metrics;
+SHOW FULL COLUMNS FROM model_performance;
+-------------------------------------------------------------
+-- total detections after confidence filtering
+SELECT COUNT(*) AS total_detections
+FROM detections; -- 4483-> 2638
+-- total transmission decisions
+SELECT COUNT(*) AS total_decisions
+FROM transmission_decisions;
+-- total alerts
+SELECT COUNT(*) AS total_alerts
+FROM alerts;
+-- decision distribution by priority
+SELECT priority_level, COUNT(*) AS cnt
+FROM transmission_decisions
+GROUP BY priority_level;
+---------------------------------------
+-- controlled model comparison
+SELECT
+    model_version,
+    run_name,
+    precision_score,
+    recall_score,
+    map50,
+    map50_95,
+    inference_time_ms,
+    training_time_sec
+FROM model_performance
+WHERE comparison_group = 'controlled_5e_416';
+----------------
+SELECT * FROM detections LIMIT 10;
+SELECT f.file_name, d.object_type, d.confidence
+FROM detections 
+JOIN frames f ON d.frame_id = f.frame_id
+LIMIT 5;
+-- count detected objects per frame --
+SELECT frame_id, COUNT(*) AS object_count
+FROM detections
+GROUP BY frame_id;
+-- count smoke, fire and total detections per frame --
+SELECT
+    frame_id,
+    SUM(CASE WHEN object_type = 'smoke' THEN 1 ELSE 0 END) AS smoke_count,
+    SUM(CASE WHEN object_type = 'fire' THEN 1 ELSE 0 END) AS fire_count,
+    COUNT(*) AS total_detected_objects
+FROM detections
+GROUP BY frame_id;
+-- detection summary per frame with file name--
+SELECT
+    d.frame_id,
+    f.file_name,
+    SUM(CASE WHEN d.object_type = 'smoke' THEN 1 ELSE 0 END) AS smoke_count,
+    SUM(CASE WHEN d.object_type = 'fire' THEN 1 ELSE 0 END) AS fire_count,
+    COUNT(*) AS total_detected_objects,
+    MAX(d.confidence) AS max_confidence
+FROM detections d
+JOIN frames f ON d.frame_id = f.frame_id
+GROUP BY d.frame_id, f.file_name;
+------------------------------------
+-- sample decisions with frame names
+SELECT
+    td.frame_id,
+    f.file_name,
+    td.priority_level,
+    td.transmission_action,
+    td.selected_qos,
+    td.destination,
+    td.reason_text,
+    td.alert_flag
+FROM transmission_decisions td
+JOIN frames f ON td.frame_id = f.frame_id
+LIMIT 20;
+SELECT COUNT(*) FROM detections;
+SELECT COUNT(*) FROM transmission_decisions;
+SELECT COUNT(*) FROM alerts;
+SELECT * FROM detections LIMIT 10;
+SELECT * FROM transmission_decisions LIMIT 10;
+SELECT * FROM alerts LIMIT 10;
+-- sample alerts with frame names
+SELECT
+    a.alert_id,
+    a.frame_id,
+    f.file_name,
+    a.alert_type,
+    a.alert_message,
+    a.severity,
+    a.alert_status,
+    a.created_at
+FROM alerts a
+JOIN frames f ON a.frame_id = f.frame_id
+LIMIT 20;
+---------------------------------------------------------------------------
+SELECT * FROM transmission_decisions LIMIT 30;
+SELECT * FROM alerts LIMIT 30;
+-- քանի high / medium / low priority կա
+SELECT priority_level, COUNT(*) AS cnt
+FROM transmission_decisions
+GROUP BY priority_level;
+-- քանի alert է ստեղծվել
+SELECT severity, COUNT(*) AS cnt
+FROM alerts
+GROUP BY severity;
+----------------------------------------------------------------------------
 
 describe frames;
 ----------------------------------------
 USE fire_smoke_db;
-
 SELECT * FROM cameras;
-
 SELECT COUNT(*) FROM frames;
-
 SELECT dataset_split, COUNT(*) AS total_frames
 FROM frames
 GROUP BY dataset_split;
@@ -169,14 +342,10 @@ LIMIT 20;
 SELECT *
 FROM frames
 LIMIT 5;
-
 SELECT COUNT(*) FROM frames;
 SELECT dataset_split, COUNT(*) FROM frames GROUP BY dataset_split;
-
 USE fire_smoke_db;
-
 SELECT COUNT(*) FROM network_metrics;
-
 SELECT qos_level, COUNT(*) AS total_rows
 FROM network_metrics
 GROUP BY qos_level;
