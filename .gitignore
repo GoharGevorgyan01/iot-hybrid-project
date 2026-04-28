@@ -53,20 +53,24 @@ edge/publisher/certs/
 *.mov
 *.mkv
 
-=========================
+# =========================
 # Input videos (ignore all)
 # =========================
 video_pipeline/input/
+
 # =========================
-# Generated outputs (ignore all by default)
+# Generated outputs (ignore all)
 # =========================
 video_pipeline/output/
-video_pipeline/db/outputs/
+video_pipeline/db/outputs/*
+
+# ML generated outputs
+video_pipeline/ml/inference/payloads/
+video_pipeline/ml/inference/decision_log.csv
 
 # =========================
 # BUT keep best analysis figures
 # =========================
-!video_pipeline/db/outputs/
 !video_pipeline/db/outputs/best/
 !video_pipeline/db/outputs/best/*
 
