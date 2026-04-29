@@ -1,0 +1,4 @@
+aws_region     = "eu-central-1"
+s3_bucket_name = "your-existing-s3-bucket-name"
+iot_topic_name = "iot/video/full"
+json_prefix    = "json-events/"
