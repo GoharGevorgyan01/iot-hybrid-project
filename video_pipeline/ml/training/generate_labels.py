@@ -6,8 +6,8 @@ import pandas as pd
 CURRENT_FILE = Path(__file__).resolve()
 VIDEO_PIPELINE_DIR = CURRENT_FILE.parents[1]
 
-INPUT_PATH = VIDEO_PIPELINE_DIR / "ml" / "event_dataset_raw.csv"
-OUTPUT_PATH = VIDEO_PIPELINE_DIR / "ml" / "event_dataset_labeled.csv"
+INPUT_PATH = "video_pipeline/ml/training/event_dataset_raw.csv"
+OUTPUT_PATH = "video_pipeline/ml/training/event_dataset_labeled.csv"
 def assign_label(row):
     """
     Rule-based pseudo-labeling logic for transmission decision.

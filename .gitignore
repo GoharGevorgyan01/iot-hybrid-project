@@ -81,3 +81,5 @@ video_pipeline/ml/inference/decision_log.csv
 Thumbs.db
 .vscode/
 .ipynb_checkpoints/
+
+video_pipeline/ml/training/*.csv

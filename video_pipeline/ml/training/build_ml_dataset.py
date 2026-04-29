@@ -11,10 +11,10 @@ CURRENT_FILE = Path(__file__).resolve()
 VIDEO_PIPELINE_DIR = CURRENT_FILE.parents[1]
 sys.path.insert(0, str(VIDEO_PIPELINE_DIR))
 
-from db.db_connection import get_connection
 
+from video_pipeline.db.db_connection import get_connection
 
-OUTPUT_PATH = VIDEO_PIPELINE_DIR / "ml" / "event_dataset_raw.csv"
+OUTPUT_PATH = VIDEO_PIPELINE_DIR / "ml" / "training" / "event_dataset_raw.csv"
 
 WINDOW_SEC = 5
 STEP_SEC = 1
@@ -192,13 +192,13 @@ def build_event_dataset(frame_df):
         while start_time + WINDOW_SEC <= duration_sec:
             end_time = start_time + WINDOW_SEC
 
-            # Main 5s window
+            # Main 5s event window
             window_5s = video_df[
                 (video_df["timestamp_sec"] >= start_time) &
                 (video_df["timestamp_sec"] < end_time)
             ]
 
-            # 10s lookback window
+            # 10s lookback window for temporal stability
             lookback_start = max(0, end_time - 10)
             window_10s = video_df[
                 (video_df["timestamp_sec"] >= lookback_start) &
@@ -216,6 +216,13 @@ def build_event_dataset(frame_df):
             smoke_total = window_5s["smoke_count"].sum()
             total_fire_smoke = fire_total + smoke_total
 
+            # Select representative frame with highest confidence
+            best_frame = window_5s.loc[window_5s["max_confidence"].idxmax()]
+
+            representative_frame_id = best_frame["frame_id"]
+            representative_frame_name = best_frame["file_name"]
+            representative_frame_path = best_frame["file_path"]
+
             bbox_first = window_5s["bbox_area_ratio"].iloc[0]
             bbox_last = window_5s["bbox_area_ratio"].iloc[-1]
 
@@ -226,12 +233,18 @@ def build_event_dataset(frame_df):
 
             # Compute consecutive fire frames
             consecutive_frames = max_consecutive_fire_frames(window_5s)
+
             event = {
                 "video_id": video_id,
                 "video_name": video_name,
                 "camera_name": camera_name,
                 "window_start_sec": start_time,
                 "window_end_sec": end_time,
+
+                # Representative frame for SEND_FULL upload
+                "representative_frame_id": representative_frame_id,
+                "representative_frame_name": representative_frame_name,
+                "representative_frame_path": representative_frame_path,
 
                 # Detection features
                 "max_confidence": window_5s["max_confidence"].max(),
@@ -261,7 +274,6 @@ def build_event_dataset(frame_df):
     print("Event-level dataset:", event_df.shape)
 
     return event_df
-
 
 def clean_event_dataset(event_df):
     """Apply initial cleaning to event-level dataset."""

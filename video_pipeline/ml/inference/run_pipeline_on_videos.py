@@ -2,13 +2,12 @@ import json
 import pandas as pd
 from pathlib import Path
 
+from s3_uploader import upload_image_to_s3
+from aws_mqtt_publisher import AWSIoTPublisher
 from inference_engine import MLDecisionEngine
 from network_policy import simulate_network_metrics, assign_qos
 
 
-# ==============================
-# Paths
-# ==============================
 BASE_DIR = Path(__file__).resolve().parents[3]
 
 DATASET_PATH = BASE_DIR / "video_pipeline" / "ml" / "training" / "event_dataset_raw.csv"
@@ -16,9 +15,6 @@ LOG_PATH = BASE_DIR / "video_pipeline" / "ml" / "inference" / "decision_log.csv"
 PAYLOAD_DIR = BASE_DIR / "video_pipeline" / "ml" / "inference" / "payloads"
 
 
-# ==============================
-# Final ML features
-# ==============================
 FEATURES = [
     "max_confidence",
     "avg_confidence",
@@ -61,7 +57,7 @@ def build_metadata_payload(row, decision, qos, network_metrics):
     }
 
 
-def build_full_payload(row, decision, qos, network_metrics, image_path):
+def build_full_payload(row, decision, qos, network_metrics, image_path, s3_image_key):
     """Build full JSON payload for critical event transmission."""
     return {
         "payload_type": "FULL_EVENT",
@@ -93,6 +89,7 @@ def build_full_payload(row, decision, qos, network_metrics, image_path):
         },
         "image_sent": True,
         "image_path": image_path,
+        "s3_image_key": s3_image_key,
         "alert_flag": True,
     }
 
@@ -101,18 +98,15 @@ def decide_action(decision):
     """Map ML decision to final transmission action."""
     if decision == "DROP":
         return "LOCAL_ONLY"
-
     if decision == "SEND_METADATA":
         return "PUBLISH_JSON_METADATA"
-
     if decision == "SEND_FULL":
         return "PUBLISH_JSON_AND_IMAGE"
-
     return "UNKNOWN"
 
 
 def save_payload(payload, event_id):
-    """Save JSON payload locally as mock cloud transmission."""
+    """Save JSON payload locally for audit/debug."""
     PAYLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     payload_type = payload["payload_type"].lower()
@@ -125,97 +119,128 @@ def save_payload(payload, event_id):
 
 
 def main():
-    """Run event-level ML decision, QoS assignment, and mock transmission."""
+    """Run ML decision, QoS assignment, local payload save, and MQTT publish."""
     df = pd.read_csv(DATASET_PATH)
+    # df = df.head(10)
+    
+    # Test mode: uncomment this line if full run is slow
+    # df = df.head(10)
+
     engine = MLDecisionEngine()
+    publisher = AWSIoTPublisher()
 
     logs = []
 
-    for event_id, row in df.iterrows():
-        feature_dict = row[FEATURES].to_dict()
+    try:
+        for event_id, row in df.iterrows():
+            feature_dict = row[FEATURES].to_dict()
 
-        # Predict event-level transmission decision
-        decision = engine.predict(feature_dict)
+            decision = engine.predict(feature_dict)
 
-        # Simulate network condition and assign QoS
-        network_metrics = simulate_network_metrics()
-        qos = assign_qos(decision, network_metrics)
+            network_metrics = simulate_network_metrics()
+            qos = assign_qos(decision, network_metrics)
 
-        action = decide_action(decision)
+            # Temporary test fix: avoid QoS 0 message loss in AWS test client
+            publish_qos = max(qos, 1)
 
-        payload = None
-        payload_path = None
-        image_path = None
-        payload_type = "NONE"
+            action = decide_action(decision)
 
-        if decision == "SEND_METADATA":
-            payload = build_metadata_payload(
-                row=row,
-                decision=decision,
-                qos=qos,
-                network_metrics=network_metrics
+            payload_path = None
+            image_path = None
+            s3_image_key = None
+            payload_type = "NONE"
+            mqtt_published = False
+
+            if decision == "SEND_METADATA":
+                payload = build_metadata_payload(
+                    row=row,
+                    decision=decision,
+                    qos=publish_qos,
+                    network_metrics=network_metrics,
+                )
+
+                payload_path = save_payload(payload, event_id)
+                publisher.publish(payload, publish_qos)
+
+                payload_type = "METADATA_ONLY"
+                mqtt_published = True
+
+            elif decision == "SEND_FULL":
+                image_path = row["representative_frame_path"]
+
+                s3_image_key = upload_image_to_s3(
+                    image_path=image_path,
+                    event_id=event_id,
+                    camera_id=row["camera_name"]
+                )
+
+                payload = build_full_payload(
+                    row=row,
+                    decision=decision,
+                    qos=publish_qos,
+                    network_metrics=network_metrics,
+                    image_path=image_path,
+                    s3_image_key=s3_image_key,
+                )
+
+                payload_path = save_payload(payload, event_id)
+                publisher.publish(payload, publish_qos)
+
+                payload_type = "FULL_EVENT"
+                mqtt_published = True
+            s3_image_key = None
+
+            logs.append({
+                "event_id": event_id,
+                "video_name": row["video_name"],
+                "camera_id": row["camera_name"],
+                "window_start_sec": row["window_start_sec"],
+                "window_end_sec": row["window_end_sec"],
+                "ml_decision": decision,
+                "network_scenario": network_metrics["network_scenario"],
+                "latency_ms": network_metrics["latency_ms"],
+                "packet_loss": network_metrics["packet_loss"],
+                "qos": qos,
+                "publish_qos": publish_qos,
+                "final_action": action,
+                "payload_type": payload_type,
+                "mqtt_published": mqtt_published,
+                "image_sent": decision == "SEND_FULL",
+                "payload_path": payload_path,
+                "image_path": image_path,
+                "s3_image_key": s3_image_key,
+            })
+
+            print(
+                f"Event {event_id}: "
+                f"{decision} | "
+                f"QoS={qos} | "
+                f"PublishQoS={publish_qos} | "
+                f"Network={network_metrics['network_scenario']} | "
+                f"Action={action} | "
+                f"Payload={payload_type} | "
+                f"MQTT={mqtt_published}"
             )
-            payload_path = save_payload(payload, event_id)
-            payload_type = "METADATA_ONLY"
 
-        elif decision == "SEND_FULL":
-            # Placeholder until real best-frame selection is connected
-            image_path = "representative_frame_placeholder.jpg"
+        log_df = pd.DataFrame(logs)
+        log_df.to_csv(LOG_PATH, index=False)
 
-            payload = build_full_payload(
-                row=row,
-                decision=decision,
-                qos=qos,
-                network_metrics=network_metrics,
-                image_path=image_path
-            )
-            payload_path = save_payload(payload, event_id)
-            payload_type = "FULL_EVENT"
+        print("\n✅ Decision pipeline finished")
+        print(f"✅ Log saved to: {LOG_PATH}")
+        print(f"✅ Payloads saved to: {PAYLOAD_DIR}")
 
-        # DROP creates no cloud payload, only local log
-        logs.append({
-            "event_id": event_id,
-            "video_name": row["video_name"],
-            "camera_id": row["camera_name"],
-            "window_start_sec": row["window_start_sec"],
-            "window_end_sec": row["window_end_sec"],
-            "ml_decision": decision,
-            "network_scenario": network_metrics["network_scenario"],
-            "latency_ms": network_metrics["latency_ms"],
-            "packet_loss": network_metrics["packet_loss"],
-            "qos": qos,
-            "final_action": action,
-            "payload_type": payload_type,
-            "image_sent": decision == "SEND_FULL",
-            "payload_path": payload_path,
-            "image_path": image_path,
-        })
+        print("\nDecision distribution:")
+        print(log_df["ml_decision"].value_counts())
 
-        print(
-            f"Event {event_id}: "
-            f"{decision} | "
-            f"QoS={qos} | "
-            f"Network={network_metrics['network_scenario']} | "
-            f"Action={action} | "
-            f"Payload={payload_type}"
-        )
+        print("\nAction distribution:")
+        print(log_df["final_action"].value_counts())
 
-    log_df = pd.DataFrame(logs)
-    log_df.to_csv(LOG_PATH, index=False)
+        print("\nPayload distribution:")
+        print(log_df["payload_type"].value_counts())
 
-    print("\n✅ Decision pipeline finished")
-    print(f"✅ Log saved to: {LOG_PATH}")
-    print(f"✅ Payloads saved to: {PAYLOAD_DIR}")
-
-    print("\nDecision distribution:")
-    print(log_df["ml_decision"].value_counts())
-
-    print("\nAction distribution:")
-    print(log_df["final_action"].value_counts())
-
-    print("\nPayload distribution:")
-    print(log_df["payload_type"].value_counts())
-
-
+    finally:
+        import time
+        time.sleep(3)
+        publisher.close()
 if __name__ == "__main__":
     main()

@@ -12,9 +12,9 @@ from xgboost import XGBClassifier
 # ==============================
 # Paths
 # ==============================
-DATASET_PATH = "video_pipeline/ml/event_dataset_labeled.csv"
-MODEL_PATH = "video_pipeline/ml/final_xgboost_model.pkl"
-ENCODER_PATH = "video_pipeline/ml/label_encoder.pkl"
+DATASET_PATH = "video_pipeline/ml/training/event_dataset_labeled.csv"
+MODEL_PATH = "video_pipeline/ml/models/final_xgboost_model.pkl"
+ENCODER_PATH = "video_pipeline/ml/models/label_encoder.pkl"
 
 
 # ==============================
