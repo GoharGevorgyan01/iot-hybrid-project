@@ -34,9 +34,9 @@ FEATURES = [
     "motion_level",
 ]
 
-
 def build_metadata_payload(row, decision, qos, network_metrics):
     """Build compact JSON payload for metadata-only transmission."""
+
     return {
         "payload_type": "METADATA_ONLY",
         "video_name": row["video_name"],
@@ -57,6 +57,34 @@ def build_metadata_payload(row, decision, qos, network_metrics):
             "consecutive_fire_ratio": round(float(row["consecutive_fire_ratio"]), 3),
         },
         "image_sent": False,
+    }
+
+def build_full_payload(row, decision, qos, network_metrics, image_path, s3_image_key, image_url=None):
+    """Build compact JSON payload for metadata-only transmission."""
+    return {
+        "payload_type": "METADATA_ONLY",
+        "video_name": row["video_name"],
+        "camera_id": row["camera_name"],
+        "window_start_sec": float(row["window_start_sec"]),
+        "window_end_sec": float(row["window_end_sec"]),
+        "ml_decision": decision,
+        "qos": qos,
+        "network": {
+            "scenario": network_metrics["network_scenario"],
+            "latency_ms": network_metrics["latency_ms"],
+            "packet_loss": network_metrics["packet_loss"],
+        },
+        "event_summary": {
+            "max_confidence": round(float(row["max_confidence"]), 3),
+            "fire_smoke_ratio": round(float(row["fire_smoke_ratio"]), 3),
+            "detection_density_5s": round(float(row["detection_density_5s"]), 3),
+            "consecutive_fire_ratio": round(float(row["consecutive_fire_ratio"]), 3),
+        },
+                "image_sent": s3_image_key is not None,
+        "image_path": image_path,
+        "s3_image_key": s3_image_key,
+        "s3_image_url": image_url,
+        "alert_flag": True,
     }
 
 
@@ -120,7 +148,21 @@ def save_payload(payload, event_id):
         json.dump(payload, f, indent=4)
 
     return str(payload_path)
+def get_representative_image_path(row):
+    """Return representative image path if the dataset contains one."""
 
+    candidate_columns = [
+        "representative_frame_path",
+        "frame_path",
+        "image_path",
+        "file_path",
+    ]
+
+    for column in candidate_columns:
+        if column in row.index and pd.notna(row[column]):
+            return row[column]
+
+    return None
 
 def main():
     """Run ML decision, QoS assignment, local payload save, and MQTT publish."""
@@ -174,15 +216,20 @@ def main():
                 mqtt_published = True
 
             elif decision == "SEND_FULL":
-                image_path = row["representative_frame_path"]
+                image_path = get_representative_image_path(row)
 
-                s3_image_key = upload_image_to_s3(
-                    image_path=image_path,
-                    event_id=event_id,
-                    camera_id=row["camera_name"]
-                )
+                if image_path:
+                    s3_image_key = upload_image_to_s3(
+                        image_path=image_path,
+                        event_id=event_id,
+                        camera_id=row["camera_name"],
+                    )
 
-                image_url = generate_presigned_url(s3_image_key)
+                    image_url = generate_presigned_url(s3_image_key)
+                else:
+                    print(f"[S3] No representative image path for event {event_id}")
+                    s3_image_key = None
+                    image_url = None
 
                 payload = build_full_payload(
                     row=row,

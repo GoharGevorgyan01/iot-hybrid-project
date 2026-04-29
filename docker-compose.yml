@@ -1,0 +1,33 @@
+services:
+  app:
+    # Build Docker image from current project folder
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Fixed container name for easier debugging
+    container_name: iot_video_pipeline_app
+
+    # Load Telegram/AWS app config from local .env file
+    env_file:
+      - ./video_pipeline/.env
+
+    # Explicit AWS SDK credential paths inside Linux container
+    environment:
+      AWS_PROFILE: default
+      AWS_SHARED_CREDENTIALS_FILE: /root/.aws/credentials
+      AWS_CONFIG_FILE: /root/.aws/config
+
+    # Mount local folders into the container
+    volumes:
+      # Project code, dataset, frames, models
+      - ./video_pipeline:/app/video_pipeline
+
+      # Windows AWS credentials mounted into Docker container
+      - ${USERPROFILE}/.aws:/root/.aws:ro
+
+    # Run the ML decision pipeline inside the container
+    command: python video_pipeline/ml/inference/run_pipeline_on_videos.py
+
+    # Do not restart after the pipeline finishes
+    restart: "no"

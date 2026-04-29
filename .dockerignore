@@ -1,0 +1,24 @@
+# Local Python virtual environment
+.venv
+
+# Python cache files
+__pycache__
+*.pyc
+
+# Git files are not needed inside Docker image
+.git
+.gitignore
+
+# Secret/config files must not be copied into image
+.env
+video_pipeline/.env
+
+# Large or generated media/output files
+runs
+*.avi
+*.mp4
+*.mov
+
+# Generated pipeline outputs
+video_pipeline/ml/inference/decision_log.csv
+video_pipeline/ml/inference/payloads/*.json

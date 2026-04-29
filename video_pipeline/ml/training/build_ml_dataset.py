@@ -6,16 +6,16 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-# Add video_pipeline folder to Python path
+# Add project root to Python path
 CURRENT_FILE = Path(__file__).resolve()
-VIDEO_PIPELINE_DIR = CURRENT_FILE.parents[1]
-sys.path.insert(0, str(VIDEO_PIPELINE_DIR))
+VIDEO_PIPELINE_DIR = CURRENT_FILE.parents[2]
+PROJECT_ROOT = CURRENT_FILE.parents[3]
 
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from video_pipeline.db.db_connection import get_connection
 
 OUTPUT_PATH = VIDEO_PIPELINE_DIR / "ml" / "training" / "event_dataset_raw.csv"
-
 WINDOW_SEC = 5
 STEP_SEC = 1
 
