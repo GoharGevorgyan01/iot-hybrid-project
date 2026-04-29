@@ -83,3 +83,9 @@ Thumbs.db
 .ipynb_checkpoints/
 
 video_pipeline/ml/training/*.csv
+
+.env
+video_pipeline/.env
+
+video_pipeline/ml/inference/decision_log.csv
+video_pipeline/ml/inference/payloads/*.json

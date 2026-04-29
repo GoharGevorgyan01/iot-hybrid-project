@@ -32,6 +32,7 @@ class MLDecisionEngine:
 
     def predict(self, feature_dict):
         """Predict DROP / SEND_METADATA / SEND_FULL."""
+
         input_df = pd.DataFrame([feature_dict])[FEATURES]
 
         prediction_encoded = self.model.predict(input_df)[0]

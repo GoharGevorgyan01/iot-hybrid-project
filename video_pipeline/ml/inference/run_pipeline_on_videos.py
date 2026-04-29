@@ -1,14 +1,17 @@
 import json
 import pandas as pd
 from pathlib import Path
+from dotenv import load_dotenv
 
-from s3_uploader import upload_image_to_s3
+from s3_uploader import upload_image_to_s3, generate_presigned_url
 from aws_mqtt_publisher import AWSIoTPublisher
 from inference_engine import MLDecisionEngine
 from network_policy import simulate_network_metrics, assign_qos
+from telegram_alert import send_critical_alert
 
 
 BASE_DIR = Path(__file__).resolve().parents[3]
+load_dotenv(BASE_DIR / "video_pipeline" / ".env")
 
 DATASET_PATH = BASE_DIR / "video_pipeline" / "ml" / "training" / "event_dataset_raw.csv"
 LOG_PATH = BASE_DIR / "video_pipeline" / "ml" / "inference" / "decision_log.csv"
@@ -57,7 +60,7 @@ def build_metadata_payload(row, decision, qos, network_metrics):
     }
 
 
-def build_full_payload(row, decision, qos, network_metrics, image_path, s3_image_key):
+def build_full_payload(row, decision, qos, network_metrics, image_path, s3_image_key, image_url=None):
     """Build full JSON payload for critical event transmission."""
     return {
         "payload_type": "FULL_EVENT",
@@ -90,6 +93,7 @@ def build_full_payload(row, decision, qos, network_metrics, image_path, s3_image
         "image_sent": True,
         "image_path": image_path,
         "s3_image_key": s3_image_key,
+        "s3_image_url": image_url,
         "alert_flag": True,
     }
 
@@ -130,6 +134,8 @@ def main():
     publisher = AWSIoTPublisher()
 
     logs = []
+    last_alert_by_camera = {}
+    ALERT_COOLDOWN_EVENTS = 5
 
     try:
         for event_id, row in df.iterrows():
@@ -148,8 +154,10 @@ def main():
             payload_path = None
             image_path = None
             s3_image_key = None
+            image_url = None
             payload_type = "NONE"
             mqtt_published = False
+            telegram_sent = False
 
             if decision == "SEND_METADATA":
                 payload = build_metadata_payload(
@@ -174,6 +182,8 @@ def main():
                     camera_id=row["camera_name"]
                 )
 
+                image_url = generate_presigned_url(s3_image_key)
+
                 payload = build_full_payload(
                     row=row,
                     decision=decision,
@@ -181,14 +191,47 @@ def main():
                     network_metrics=network_metrics,
                     image_path=image_path,
                     s3_image_key=s3_image_key,
+                    image_url=image_url,
                 )
 
                 payload_path = save_payload(payload, event_id)
                 publisher.publish(payload, publish_qos)
 
+                event_data = {
+                    "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "camera_id": row["camera_name"],
+                    "type": "FIRE/SMOKE",
+                    "confidence": round(float(row["max_confidence"]), 3),
+                    "risk_score": round(float(row["max_confidence"]), 3),
+                    "consecutive_frames": round(float(row["consecutive_fire_ratio"]), 3),
+                    "decision": decision,
+                    "qos": publish_qos,
+                    "event_id": f"evt_{event_id}",
+                }
+
+                camera_id = row["camera_name"]
+                last_alert_event_id = last_alert_by_camera.get(camera_id)
+
+                should_send_telegram = (
+                    last_alert_event_id is None
+                    or event_id - last_alert_event_id >= ALERT_COOLDOWN_EVENTS
+                )
+
+                if should_send_telegram:
+                    telegram_sent = send_critical_alert(
+                        event_data=event_data,
+                        s3_image_key=s3_image_key,
+                        image_url=image_url,
+                    )
+                    last_alert_by_camera[camera_id] = event_id
+                else:
+                    print(
+                        f"[Telegram] Skipped alert for {camera_id}: "
+                        f"cooldown active since event {last_alert_event_id}"
+                    )
+
                 payload_type = "FULL_EVENT"
                 mqtt_published = True
-            s3_image_key = None
 
             logs.append({
                 "event_id": event_id,
@@ -205,10 +248,12 @@ def main():
                 "final_action": action,
                 "payload_type": payload_type,
                 "mqtt_published": mqtt_published,
+                "telegram_sent": telegram_sent if decision == "SEND_FULL" else False,
                 "image_sent": decision == "SEND_FULL",
                 "payload_path": payload_path,
                 "image_path": image_path,
                 "s3_image_key": s3_image_key,
+                "s3_image_url": image_url,
             })
 
             print(
