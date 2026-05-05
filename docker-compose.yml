@@ -1,33 +1,89 @@
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: iot_video_pipeline_mysql
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: iot_video_pipeline
+
+    ports:
+      - "3307:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./video_pipeline/db/runtime_schema.sql:/docker-entrypoint-initdb.d/runtime_schema.sql:ro
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app:
-    # Build Docker image from current project folder
     build:
       context: .
       dockerfile: Dockerfile
 
-    # Fixed container name for easier debugging
     container_name: iot_video_pipeline_app
 
-    # Load Telegram/AWS app config from local .env file
     env_file:
       - ./video_pipeline/.env
 
-    # Explicit AWS SDK credential paths inside Linux container
     environment:
       AWS_PROFILE: default
       AWS_SHARED_CREDENTIALS_FILE: /root/.aws/credentials
       AWS_CONFIG_FILE: /root/.aws/config
 
-    # Mount local folders into the container
-    volumes:
-      # Project code, dataset, frames, models
-      - ./video_pipeline:/app/video_pipeline
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: iot_video_pipeline
 
-      # Windows AWS credentials mounted into Docker container
+    volumes:
+      - ./video_pipeline:/app/video_pipeline
       - ${USERPROFILE}/.aws:/root/.aws:ro
 
-    # Run the ML decision pipeline inside the container
-    command: python video_pipeline/ml/inference/run_pipeline_on_videos.py
+    ports:
+      - "8000:8000"
 
-    # Do not restart after the pipeline finishes
+    command: python run_full_monitored_pipeline.py
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
     restart: "no"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: iot_video_pipeline_prometheus
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    depends_on:
+      - app
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: iot_video_pipeline_grafana
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+    depends_on:
+      - prometheus
+
+volumes:
+  mysql_data:
+  prometheus_data:
+  grafana_data:

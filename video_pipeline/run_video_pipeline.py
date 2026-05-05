@@ -5,8 +5,8 @@ import psutil
 from ultralytics import YOLO
 
 # DB imports
-from db.db_connection import get_connection
-from db.insert_functions import (
+from video_pipeline.db.db_connection import get_connection
+from video_pipeline.db.insert_functions import (
     insert_video,
     insert_frame,
     insert_detection,
@@ -14,12 +14,17 @@ from db.insert_functions import (
 )
 
 # Feature extraction helpers
-from utils import (
+from video_pipeline.utils import (
     compute_brightness,
     compute_blur,
     compute_resolution,
     compute_file_size_kb,
     compute_motion
+)
+
+from video_pipeline.ml.inference.metrics_exporter import (
+    record_frame_processed,
+    record_frame_with_detection,
 )
 
 MODEL_PATH = "model/runs/yolov8n_quick_test/weights/best.pt"
@@ -92,6 +97,9 @@ def process_video(video_path, model, cursor, conn):
 
         frame_index += 1
 
+        # Metrics: count every processed frame
+        record_frame_processed()
+
         # Start full frame processing timer
         frame_start_time = time.perf_counter()
 
@@ -124,6 +132,9 @@ def process_video(video_path, model, cursor, conn):
 
         # Save only important frames
         if frame_has_detection:
+            # Metrics: count frames where fire/smoke was detected
+            record_frame_with_detection()
+
             file_name = f"{camera_id}_frame_{frame_index}.jpg"
             output_path = os.path.join(SAVE_DIR, file_name)
 

@@ -99,6 +99,10 @@ SELECT object_type, COUNT(*) AS count
 FROM detections
 GROUP BY object_type;
 
+select count(*) As count
+from frames;
+SELECT COUNT(*) AS total_detections FROM detections;
+
 
 -- =========================================
 -- Confidence statistics
@@ -141,3 +145,122 @@ FROM detections
 GROUP BY frame_id
 ORDER BY detections_per_frame DESC
 LIMIT 10;
+
+-- ամեն video → քանի frame է պահվել → 1 վայրկյանում միջինը քանիսը
+SELECT 
+    v.video_name,
+    v.camera_name,
+    v.duration_sec,
+    v.fps,
+    v.total_frames,
+    COUNT(f.frame_id) AS saved_frames,
+    ROUND(COUNT(f.frame_id) / v.duration_sec, 2) AS saved_frames_per_sec
+FROM videos v
+LEFT JOIN frames f ON v.video_id = f.video_id
+GROUP BY 
+    v.video_id,
+    v.video_name,
+    v.camera_name,
+    v.duration_sec,
+    v.fps,
+    v.total_frames;
+    
+-- Detection density
+-- cam01 → fire քանի հատ/sec
+
+SELECT 
+    v.video_name,
+    d.object_type,
+    COUNT(d.detection_id) AS detection_count,
+    ROUND(COUNT(d.detection_id) / v.duration_sec, 2) AS detections_per_sec
+FROM videos v
+JOIN frames f ON v.video_id = f.video_id
+JOIN detections d ON f.frame_id = d.frame_id
+GROUP BY v.video_name, d.object_type, v.duration_sec;
+
+--------------------
+SELECT COUNT(*) FROM frames;
+SELECT COUNT(*) FROM detections;
+SELECT object_type, COUNT(*) FROM detections GROUP BY object_type;
+SELECT video_id, COUNT(*) as frame_count FROM frames GROUP BY video_id;
+SELECT frame_id, timestamp FROM frames LIMIT 10;
+
+--------------
+-- =========================================================
+-- ML FEATURE INSPECTION
+-- =========================================================
+
+-- Confidence range
+SELECT 
+    ROUND(MIN(confidence), 3) AS min_confidence,
+    ROUND(AVG(confidence), 3) AS avg_confidence,
+    ROUND(MAX(confidence), 3) AS max_confidence
+FROM detections;
+
+-- Detection count per frame
+SELECT 
+    COUNT(*) AS total_frame_groups,
+    ROUND(AVG(detection_count), 2) AS avg_detections_per_frame,
+    MIN(detection_count) AS min_detections_per_frame,
+    MAX(detection_count) AS max_detections_per_frame
+FROM (
+    SELECT frame_id, COUNT(*) AS detection_count
+    FROM detections
+    GROUP BY frame_id
+) t;
+
+-- Fire/smoke count per frame
+SELECT 
+    frame_id,
+    SUM(object_type = 'fire') AS fire_count,
+    SUM(object_type = 'smoke') AS smoke_count,
+    COUNT(*) AS object_count,
+    ROUND(MAX(confidence), 3) AS max_confidence,
+    ROUND(AVG(confidence), 3) AS avg_confidence
+FROM detections
+GROUP BY frame_id
+ORDER BY object_count DESC
+LIMIT 20;
+
+-- Bounding box area range
+SELECT 
+    ROUND(MIN(bbox_width * bbox_height), 2) AS min_bbox_area,
+    ROUND(AVG(bbox_width * bbox_height), 2) AS avg_bbox_area,
+    ROUND(MAX(bbox_width * bbox_height), 2) AS max_bbox_area
+FROM detections;
+
+-- Frame quality ranges
+SELECT
+    ROUND(MIN(brightness), 2) AS min_brightness,
+    ROUND(AVG(brightness), 2) AS avg_brightness,
+    ROUND(MAX(brightness), 2) AS max_brightness,
+    ROUND(MIN(blur_score), 2) AS min_blur,
+    ROUND(AVG(blur_score), 2) AS avg_blur,
+    ROUND(MAX(blur_score), 2) AS max_blur,
+    ROUND(MIN(motion_level), 2) AS min_motion,
+    ROUND(AVG(motion_level), 2) AS avg_motion,
+    ROUND(MAX(motion_level), 2) AS max_motion
+FROM frames;
+
+-- Saved frames per video
+SELECT 
+    v.video_name,
+    v.duration_sec,
+    v.fps,
+    v.total_frames,
+    COUNT(f.frame_id) AS saved_frames,
+    ROUND(COUNT(f.frame_id) / v.duration_sec, 2) AS saved_frames_per_sec
+FROM videos v
+LEFT JOIN frames f ON v.video_id = f.video_id
+GROUP BY v.video_id, v.video_name, v.duration_sec, v.fps, v.total_frames;
+
+-- Detection distribution per video
+SELECT 
+    v.video_name,
+    d.object_type,
+    COUNT(*) AS detection_count,
+    ROUND(COUNT(*) / v.duration_sec, 2) AS detections_per_sec
+FROM videos v
+JOIN frames f ON v.video_id = f.video_id
+JOIN detections d ON f.frame_id = d.frame_id
+GROUP BY v.video_name, d.object_type, v.duration_sec;

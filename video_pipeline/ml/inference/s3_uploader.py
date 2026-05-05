@@ -1,7 +1,7 @@
 import boto3
 from pathlib import Path
 
-from aws_config import S3_BUCKET_NAME, S3_IMAGE_PREFIX
+from video_pipeline.ml.inference.aws_config import S3_BUCKET_NAME, S3_IMAGE_PREFIX
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

@@ -2,7 +2,7 @@ import ssl
 import json
 import paho.mqtt.client as mqtt
 
-from aws_config import (
+from video_pipeline.ml.inference.aws_config import (
     AWS_IOT_ENDPOINT,
     ROOT_CA_PATH,
     CERT_PATH,

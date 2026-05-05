@@ -18,7 +18,24 @@ runs
 *.avi
 *.mp4
 *.mov
+*.mkv
+
 
 # Generated pipeline outputs
+video_pipeline/output
+video_pipeline/db/outputs
 video_pipeline/ml/inference/decision_log.csv
 video_pipeline/ml/inference/payloads/*.json
+
+
+_archive_legacy
+data
+docs
+results
+runs
+db
+monitoring/grafana
+
+terraform/.terraform
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup

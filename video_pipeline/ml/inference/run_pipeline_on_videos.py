@@ -1,13 +1,21 @@
 import json
+import os
 import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
 
-from s3_uploader import upload_image_to_s3, generate_presigned_url
-from aws_mqtt_publisher import AWSIoTPublisher
-from inference_engine import MLDecisionEngine
-from network_policy import simulate_network_metrics, assign_qos
-from telegram_alert import send_critical_alert
+from video_pipeline.ml.inference.network_policy import simulate_network_metrics, assign_qos
+from video_pipeline.ml.inference.s3_uploader import upload_image_to_s3, generate_presigned_url
+from video_pipeline.ml.inference.aws_mqtt_publisher import AWSIoTPublisher
+from video_pipeline.ml.inference.telegram_alert import send_critical_alert
+from video_pipeline.ml.inference.inference_engine import MLDecisionEngine
+from video_pipeline.ml.inference.metrics_exporter import (
+    start_metrics_server,
+    record_event,
+    record_mqtt_publish,
+    record_s3_upload,
+    record_telegram_alert,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -165,10 +173,14 @@ def get_representative_image_path(row):
     return None
 
 def main():
-    """Run ML decision, QoS assignment, local payload save, and MQTT publish."""
+    """Run ML decision, QoS assignment, payload save, MQTT/S3/Telegram actions, and metrics export."""
+
+    # Start Prometheus endpoint: http://localhost:8000/metrics
+    if os.getenv("METRICS_SERVER_ALREADY_STARTED") != "1":
+        start_metrics_server(port=8000)
+
     df = pd.read_csv(DATASET_PATH)
-    # df = df.head(10)
-    
+
     # Test mode: uncomment this line if full run is slow
     # df = df.head(10)
 
@@ -212,6 +224,9 @@ def main():
                 payload_path = save_payload(payload, event_id)
                 publisher.publish(payload, publish_qos)
 
+                # Metrics: MQTT publish happened
+                record_mqtt_publish()
+
                 payload_type = "METADATA_ONLY"
                 mqtt_published = True
 
@@ -224,6 +239,10 @@ def main():
                         event_id=event_id,
                         camera_id=row["camera_name"],
                     )
+
+                    # Metrics: count only successful S3 uploads
+                    if s3_image_key:
+                        record_s3_upload()
 
                     image_url = generate_presigned_url(s3_image_key)
                 else:
@@ -243,6 +262,9 @@ def main():
 
                 payload_path = save_payload(payload, event_id)
                 publisher.publish(payload, publish_qos)
+
+                # Metrics: MQTT publish happened
+                record_mqtt_publish()
 
                 event_data = {
                     "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -270,6 +292,11 @@ def main():
                         s3_image_key=s3_image_key,
                         image_url=image_url,
                     )
+
+                    # Metrics: count only actually sent Telegram alerts
+                    if telegram_sent:
+                        record_telegram_alert()
+
                     last_alert_by_camera[camera_id] = event_id
                 else:
                     print(
@@ -279,6 +306,13 @@ def main():
 
                 payload_type = "FULL_EVENT"
                 mqtt_published = True
+
+            # Metrics: count every processed event with its decision, QoS, and final action
+            record_event(
+                decision=decision,
+                qos=publish_qos,
+                action=action,
+            )
 
             logs.append({
                 "event_id": event_id,
@@ -296,7 +330,7 @@ def main():
                 "payload_type": payload_type,
                 "mqtt_published": mqtt_published,
                 "telegram_sent": telegram_sent if decision == "SEND_FULL" else False,
-                "image_sent": decision == "SEND_FULL",
+                "image_sent": bool(s3_image_key),
                 "payload_path": payload_path,
                 "image_path": image_path,
                 "s3_image_key": s3_image_key,
@@ -330,9 +364,17 @@ def main():
         print("\nPayload distribution:")
         print(log_df["payload_type"].value_counts())
 
-    finally:
+        # Keep container alive so Prometheus can scrape /metrics
         import time
-        time.sleep(3)
+
+        print("\n[Metrics] Keeping container alive for Prometheus scraping...")
+        print("[Metrics] Press Ctrl+C to stop the container.")
+
+        while True:
+            time.sleep(30)
+
+    finally:
         publisher.close()
+
 if __name__ == "__main__":
     main()
