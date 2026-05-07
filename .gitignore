@@ -95,3 +95,6 @@ _archive_runs/
 
 # Generated frame outputs
 video_pipeline/output/saved_frames/
+
+# Legacy / archived code
+_archive_legacy/
