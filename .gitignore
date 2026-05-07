@@ -89,3 +89,9 @@ video_pipeline/.env
 
 video_pipeline/ml/inference/decision_log.csv
 video_pipeline/ml/inference/payloads/*.json
+
+# Local archived runs / backups
+_archive_runs/
+
+# Generated frame outputs
+video_pipeline/output/saved_frames/
