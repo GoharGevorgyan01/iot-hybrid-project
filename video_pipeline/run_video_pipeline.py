@@ -27,7 +27,7 @@ from video_pipeline.ml.inference.metrics_exporter import (
     record_frame_with_detection,
 )
 
-MODEL_PATH = "model/runs/yolov8n_quick_test/weights/best.pt"
+MODEL_PATH = "video_pipeline/ml/models/yolov8s_best.pt"
 INPUT_DIR = "video_pipeline/input"
 SAVE_DIR = "video_pipeline/output/saved_frames"
 
