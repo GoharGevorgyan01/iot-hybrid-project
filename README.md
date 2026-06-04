@@ -8,10 +8,9 @@ An end-to-end AI-driven IoT video analytics system for fire and smoke detection.
 * Event-level feature engineering from video streams
 * XGBoost-based decision engine
 * Intelligent transmission actions:
-
-  * DROP
-  * SEND_METADATA
-  * SEND_FULL
+  - DROP
+  - SEND_METADATA
+  - SEND_FULL
 * MQTT communication through AWS IoT Core
 * Amazon S3 integration for image storage
 * Telegram alert notifications
@@ -62,7 +61,6 @@ Decision engine:
 - XGBoost accuracy: 85%
 - Actions: DROP, SEND_METADATA, SEND_FULL
 
-Final model accuracy: approximately 85%.
 
 ## Monitoring
 
@@ -74,6 +72,14 @@ The system includes Prometheus metrics collection and Grafana dashboards for:
 * Cloud transmission monitoring
 * CPU and memory utilization
 
+## Monitoring Dashboard
+<img width="1919" height="1023" alt="image" src="https://github.com/user-attachments/assets/04a920d1-0411-4c05-a1cc-b477e90cb160" />
+
+
+## Detection Example
+<img width="1120" height="570" alt="Без названия" src="https://github.com/user-attachments/assets/f009ac71-b80e-438a-ae08-1d71f7b52377" />
+
+
 ## Repository Structure
 
 ```text
@@ -83,7 +89,4 @@ terraform/        # AWS infrastructure provisioning
 results/          # YOLO training and evaluation results
 ```
 
-## Author
-
-Gohar Gevorgyan
 
