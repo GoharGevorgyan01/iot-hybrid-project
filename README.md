@@ -61,6 +61,8 @@ Decision engine:
 - XGBoost accuracy: 85%
 - Actions: DROP, SEND_METADATA, SEND_FULL
 
+## Detection Example
+![Detection Example](results/figures/val_batch1_pred.jpg)
 
 ## Monitoring
 
@@ -73,11 +75,7 @@ The system includes Prometheus metrics collection and Grafana dashboards for:
 * CPU and memory utilization
 
 ## Monitoring Dashboard
-<img width="1919" height="1023" alt="image" src="https://github.com/user-attachments/assets/04a920d1-0411-4c05-a1cc-b477e90cb160" />
-
-
-## Detection Example
-<img width="1120" height="570" alt="Без названия" src="https://github.com/user-attachments/assets/f009ac71-b80e-438a-ae08-1d71f7b52377" />
+![Grafana Dashboard](monitoring/grafana/full_dashboard_1.png)
 
 
 ## Repository Structure
