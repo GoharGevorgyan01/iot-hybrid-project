@@ -2,6 +2,8 @@
 
 An end-to-end AI-driven IoT video analytics system for fire and smoke detection. The project combines computer vision, machine learning, cloud integration, infrastructure automation, and monitoring to intelligently process video streams and manage data transmission.
 
+The system was developed as a hybrid Edge–Cloud architecture for intelligent fire and smoke event detection, prioritization, and transmission management.
+
 ## Key Features
 
 * Fire and smoke detection using YOLOv8s
@@ -20,10 +22,21 @@ An end-to-end AI-driven IoT video analytics system for fire and smoke detection.
 
 ## Architecture
 
-Hybrid Edge–Cloud architecture:
-
-Video Stream → YOLOv8s Detection → Feature Extraction → XGBoost Decision Engine → QoS Assignment → AWS IoT Core → Amazon S3 / Telegram Alerts
-
+```text
+Video Stream
+      ↓
+YOLOv8s Detection
+      ↓
+Feature Extraction
+      ↓
+XGBoost Decision Engine
+      ↓
+QoS Assignment
+      ↓
+AWS IoT Core
+      ↓
+Amazon S3 / Telegram Alerts
+```
 ## Technology Stack
 
 * Python
